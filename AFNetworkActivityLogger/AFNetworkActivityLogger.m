@@ -75,7 +75,8 @@ static NSError * AFNetworkErrorFromNotification(NSNotification *notification) {
     }
 
     self.level = AFLoggerLevelInfo;
-
+    self.maxLogLength = 1000;
+    self.prettyJsonDescription = YES;
     return self;
 }
 
@@ -162,6 +163,10 @@ static void * AFNetworkRequestStartDate = &AFNetworkRequestStartDate;
 
     NSTimeInterval elapsedTime = [[NSDate date] timeIntervalSinceDate:objc_getAssociatedObject(notification.object, AFNetworkRequestStartDate)];
 
+    if (self.prettyJsonDescription) {
+        responseObject = [self jsonDescriptionForResponseObject:responseObject];
+    }
+
     if (error) {
         switch (self.level) {
             case AFLoggerLevelDebug:
@@ -186,4 +191,32 @@ static void * AFNetworkRequestStartDate = &AFNetworkRequestStartDate;
     }
 }
 
+- (NSString *)jsonDescriptionForResponseObject:(id)responseObject {
+    NSError * err;
+    NSData *jsonData;
+
+    if ([responseObject isKindOfClass:[NSDictionary class]] || [responseObject isKindOfClass:[NSArray class]]) {
+      jsonData = [NSJSONSerialization dataWithJSONObject:responseObject options:NSJSONWritingPrettyPrinted error:&err];
+
+       if (err) {
+            return responseObject;
+        } else {
+            NSString *jsonString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+            if (jsonString.length > self.maxLogLength) {
+                jsonString = [NSString stringWithFormat:@"%@...(Skipped %i symbols)", [jsonString substringToIndex:self.maxLogLength], jsonString.length - self.maxLogLength];
+            }
+            return jsonString;
+        }
+    } else if ([responseObject isKindOfClass:[NSString class]]) {
+        NSData *data = [responseObject dataUsingEncoding:NSUTF8StringEncoding];
+        id jsonObject = [NSJSONSerialization JSONObjectWithData:data options:0 error:&err];
+        if (err) {
+            return responseObject;
+        } else {
+            return [self jsonDescriptionForResponseObject:jsonObject];
+        }
+    } else {
+        return responseObject;
+    }
+}
 @end
