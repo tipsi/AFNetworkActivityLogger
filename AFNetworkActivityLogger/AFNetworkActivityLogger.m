@@ -33,7 +33,7 @@ static NSURLRequest * AFNetworkRequestFromNotification(NSNotification *notificat
     } else if ([[notification object] respondsToSelector:@selector(request)]) {
         request = [[notification object] request];
     }
-
+    
     return request;
 }
 
@@ -59,12 +59,12 @@ static NSError * AFNetworkErrorFromNotification(NSNotification *notification) {
 
 + (instancetype)sharedLogger {
     static AFNetworkActivityLogger *_sharedLogger = nil;
-
+    
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         _sharedLogger = [[self alloc] init];
     });
-
+    
     return _sharedLogger;
 }
 
@@ -73,7 +73,7 @@ static NSError * AFNetworkErrorFromNotification(NSNotification *notification) {
     if (!self) {
         return nil;
     }
-
+    
     self.level = AFLoggerLevelInfo;
     self.maxLogLength = 1000;
     self.prettyJsonDescription = YES;
@@ -86,10 +86,10 @@ static NSError * AFNetworkErrorFromNotification(NSNotification *notification) {
 
 - (void)startLogging {
     [self stopLogging];
-
+    
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(networkRequestDidStart:) name:AFNetworkingOperationDidStartNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(networkRequestDidFinish:) name:AFNetworkingOperationDidFinishNotification object:nil];
-
+    
 #if (defined(__IPHONE_OS_VERSION_MAX_ALLOWED) && __IPHONE_OS_VERSION_MAX_ALLOWED >= 70000) || (defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && __MAC_OS_X_VERSION_MAX_ALLOWED >= 1090)
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(networkRequestDidStart:) name:AFNetworkingTaskDidResumeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(networkRequestDidFinish:) name:AFNetworkingTaskDidCompleteNotification object:nil];
@@ -106,22 +106,22 @@ static void * AFNetworkRequestStartDate = &AFNetworkRequestStartDate;
 
 - (void)networkRequestDidStart:(NSNotification *)notification {
     NSURLRequest *request = AFNetworkRequestFromNotification(notification);
-
+    
     if (!request) {
         return;
     }
-
+    
     if (request && self.filterPredicate && [self.filterPredicate evaluateWithObject:request]) {
         return;
     }
-
+    
     objc_setAssociatedObject(notification.object, AFNetworkRequestStartDate, [NSDate date], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
+    
     NSString *body = nil;
     if ([request HTTPBody]) {
         body = [[NSString alloc] initWithData:[request HTTPBody] encoding:NSUTF8StringEncoding];
     }
-
+    
     switch (self.level) {
         case AFLoggerLevelDebug:
             NSLog(@"%@ '%@': %@ %@", [request HTTPMethod], [[request URL] absoluteString], [request allHTTPHeaderFields], body);
@@ -138,35 +138,39 @@ static void * AFNetworkRequestStartDate = &AFNetworkRequestStartDate;
     NSURLRequest *request = AFNetworkRequestFromNotification(notification);
     NSURLResponse *response = [notification.object response];
     NSError *error = AFNetworkErrorFromNotification(notification);
-
+    
     if (!request && !response) {
         return;
     }
-
+    
     if (request && self.filterPredicate && [self.filterPredicate evaluateWithObject:request]) {
         return;
     }
-
+    
     NSUInteger responseStatusCode = 0;
     NSDictionary *responseHeaderFields = nil;
     if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
         responseStatusCode = (NSUInteger)[(NSHTTPURLResponse *)response statusCode];
         responseHeaderFields = [(NSHTTPURLResponse *)response allHeaderFields];
     }
-
+    
     id responseObject = nil;
     if ([[notification object] respondsToSelector:@selector(responseString)]) {
         responseObject = [[notification object] responseString];
     } else if (notification.userInfo) {
         responseObject = notification.userInfo[AFNetworkingTaskDidCompleteSerializedResponseKey];
+        if (!responseObject) {
+            responseObject = [[notification.userInfo[AFNetworkingTaskDidCompleteErrorKey] userInfo] valueForKey:@"JSONResponseSerializerWithDataKey"];
+            
+        }
     }
-
+    
     NSTimeInterval elapsedTime = [[NSDate date] timeIntervalSinceDate:objc_getAssociatedObject(notification.object, AFNetworkRequestStartDate)];
-
+    
     if (self.prettyJsonDescription) {
         responseObject = [self jsonDescriptionForResponseObject:responseObject];
     }
-
+    
     if (error) {
         switch (self.level) {
             case AFLoggerLevelDebug:
@@ -194,11 +198,11 @@ static void * AFNetworkRequestStartDate = &AFNetworkRequestStartDate;
 - (NSString *)jsonDescriptionForResponseObject:(id)responseObject {
     NSError * err;
     NSData *jsonData;
-
+    
     if ([responseObject isKindOfClass:[NSDictionary class]] || [responseObject isKindOfClass:[NSArray class]]) {
-      jsonData = [NSJSONSerialization dataWithJSONObject:responseObject options:NSJSONWritingPrettyPrinted error:&err];
-
-       if (err) {
+        jsonData = [NSJSONSerialization dataWithJSONObject:responseObject options:NSJSONWritingPrettyPrinted error:&err];
+        
+        if (err) {
             return responseObject;
         } else {
             NSString *jsonString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
